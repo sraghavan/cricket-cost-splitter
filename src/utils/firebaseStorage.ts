@@ -49,7 +49,7 @@ export class FirebaseStorage {
       const docSnap = await getDoc(this.docRef);
       
       if (docSnap.exists()) {
-        const data = docSnap.data();
+        const data = docSnap.data() as any;
         // Remove Firebase-specific fields
         const { lastUpdated, version, ...appData } = data;
         console.log('Data loaded from Firebase successfully');
@@ -66,15 +66,15 @@ export class FirebaseStorage {
 
   // Set up real-time listener for data changes
   onDataChange(callback: (data: AppData | null) => void): () => void {
-    const unsubscribe = onSnapshot(this.docRef, (doc) => {
+    const unsubscribe = onSnapshot(this.docRef, (doc: any) => {
       if (doc.exists()) {
-        const data = doc.data();
+        const data = doc.data() as any;
         const { lastUpdated, version, ...appData } = data;
         callback(appData as AppData);
       } else {
         callback(null);
       }
-    }, (error) => {
+    }, (error: any) => {
       console.error('Error listening to Firebase changes:', error);
       callback(null);
     });
