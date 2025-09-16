@@ -31,9 +31,12 @@ A React-based web application for managing cricket match expenses and player pay
 - **Mobile-Friendly**: Optimized for sharing in cricket team groups
 
 ### 💾 Data Management
-- **Browser Storage**: Automatic saving to localStorage
+- **Cloud Sync**: Optional Firebase integration for real-time data synchronization across devices
+- **Offline Support**: Works seamlessly without internet connection, syncs when online
+- **Browser Storage**: Automatic saving to localStorage as backup
 - **Export/Import**: Download and restore data as JSON files
-- **Backup & Restore**: Maintain data across browser sessions
+- **Automatic Backups**: Cloud-based backup system with restore functionality
+- **Multi-Device Access**: Access your data from phone, tablet, or computer
 
 ## Getting Started
 
@@ -94,13 +97,15 @@ npm run build
 
 ### Built With
 - **React 18** with TypeScript
+- **Firebase** for real-time database and cloud sync
 - **date-fns** for date management
 - **html2canvas** for image generation
 - **uuid** for unique identifiers
 
 ### Architecture
 - Component-based React architecture
-- localStorage for data persistence
+- Hybrid storage: Firebase + localStorage for optimal performance
+- Real-time data synchronization across devices
 - Pure functions for calculations
 - Responsive CSS design
 
@@ -117,6 +122,14 @@ The app stores data in the following structure:
 - **Weekends**: Saturday/Sunday matches plus weekday matches
 - **Matches**: Players, costs, payments
 - **Payments**: Amount due, amount paid, status
+
+## 🚀 Deployment
+
+Ready to deploy? Check out [DEPLOYMENT.md](./DEPLOYMENT.md) for step-by-step instructions on:
+- Deploying to Vercel
+- Setting up Firebase for data sync
+- Configuring environment variables
+- Enabling real-time sync across devices
 
 ---
 
