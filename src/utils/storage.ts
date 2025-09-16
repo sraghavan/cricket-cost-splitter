@@ -1,4 +1,4 @@
-import { AppData, Player, Weekend, Match } from '../types';
+import { AppData, Player, Weekend } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, startOfWeek, addDays } from 'date-fns';
 
