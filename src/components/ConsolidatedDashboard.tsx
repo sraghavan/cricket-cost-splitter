@@ -4,6 +4,7 @@ import { getPlayerPayment, calculateMatchCostPerPlayer, createPayment } from '..
 import { format, parse, addDays } from 'date-fns';
 import { exportData, getNextWeekend } from '../utils/storage';
 import { v4 as uuidv4 } from 'uuid';
+import DataManagement from './DataManagement';
 
 interface ConsolidatedDashboardProps {
   appData: AppData;
@@ -23,6 +24,7 @@ interface PlayerPaymentRow {
 
 const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, onAppDataUpdate }) => {
   const [showPlayerManagement, setShowPlayerManagement] = useState(false);
+  const [showDataManagement, setShowDataManagement] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<{playerId: string, field: string} | null>(null);
   const [editingCell, setEditingCell] = useState<{playerId: string, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -658,8 +660,8 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
           <button className="action-btn secondary" onClick={() => setShowPlayerManagement(true)}>
             Manage Players ({appData.players.length})
           </button>
-          <button className="action-btn secondary" onClick={handleExportData}>
-            Export Data
+          <button className="action-btn secondary" onClick={() => setShowDataManagement(true)}>
+            Data Management
           </button>
         </div>
       </div>
@@ -935,6 +937,38 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                 Close
               </button>
               <span className="footer-text">Click any cell to edit • All changes are saved automatically</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Data Management Modal */}
+      {showDataManagement && (
+        <div className="modal-overlay" onClick={() => setShowDataManagement(false)}>
+          <div className="modal large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Data Management</h2>
+              <button 
+                className="modal-close" 
+                onClick={() => setShowDataManagement(false)}
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <DataManagement 
+                appData={appData}
+                onDataImport={onAppDataUpdate}
+              />
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn secondary" 
+                onClick={() => setShowDataManagement(false)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
