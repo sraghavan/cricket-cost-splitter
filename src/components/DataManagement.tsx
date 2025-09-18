@@ -144,6 +144,25 @@ const DataManagement: React.FC<DataManagementProps> = ({ appData, onDataImport }
     }
   };
 
+  const cleanPlayerData = () => {
+    if (window.confirm('Are you sure you want to clean player data? This will reset all arrears, advance payments, and balances to 0 but keep player names and matches.')) {
+      const cleanedPlayers = appData.players.map(player => ({
+        ...player,
+        balance: 0,
+        arrears: 0,
+        advancePayment: 0
+      }));
+      
+      const cleanedData = {
+        ...appData,
+        players: cleanedPlayers
+      };
+      
+      onDataImport(cleanedData);
+      alert('Player data has been cleaned successfully!');
+    }
+  };
+
   return (
     <div className="data-management">
       <h3>Data Management</h3>
@@ -179,11 +198,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ appData, onDataImport }
       <div className="data-section">
         <h4>Danger Zone</h4>
         <div className="data-actions">
+          <button className="btn btn-warning" onClick={cleanPlayerData}>
+            🧹 Clean Player Data
+          </button>
           <button className="btn btn-danger" onClick={clearAllData}>
             🗑️ Clear All Data
           </button>
         </div>
-        <p className="help-text">⚠️ This will permanently delete all data. This action cannot be undone.</p>
+        <p className="help-text">⚠️ Clear All Data will permanently delete everything. Clean Player Data will reset balances/arrears but keep players and matches.</p>
       </div>
 
       <input

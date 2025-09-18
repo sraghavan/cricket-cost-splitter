@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppData, Weekend, Player, Match, Payment } from '../types';
 import { getPlayerPayment, calculateMatchCostPerPlayer, createPayment } from '../utils/calculations';
 import { format, parse, addDays } from 'date-fns';
-import { exportData, getNextWeekend } from '../utils/storage';
+import { getNextWeekend } from '../utils/storage';
 import { v4 as uuidv4 } from 'uuid';
 import DataManagement from './DataManagement';
 
@@ -28,8 +28,8 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
   const [editingPlayer, setEditingPlayer] = useState<{playerId: string, field: string} | null>(null);
   const [editingCell, setEditingCell] = useState<{playerId: string, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
-  const [newPlayerData, setNewPlayerData] = useState<{firstName: string, lastName: string, nickname: string, mobile: string, regular: boolean}>({
-    firstName: '', lastName: '', nickname: '', mobile: '', regular: false
+  const [newPlayerData, setNewPlayerData] = useState<{firstName: string, lastName: string, nickname: string, mobile: string, regular: boolean, arrears: number, advancePayment: number}>({
+    firstName: '', lastName: '', nickname: '', mobile: '', regular: false, arrears: 0, advancePayment: 0
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [showMatchForm, setShowMatchForm] = useState<'saturday' | 'sunday' | null>(null);
@@ -39,6 +39,17 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     selectedPlayers: [] as string[],
     club: 'MICC' as 'MICC' | 'Sadhooz'
   });
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(() => {
+    const saved = localStorage.getItem('cricket-payment-sort-config');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Save sort configuration to localStorage when it changes
+  useEffect(() => {
+    if (sortConfig) {
+      localStorage.setItem('cricket-payment-sort-config', JSON.stringify(sortConfig));
+    }
+  }, [sortConfig]);
 
   const getCurrentWeekend = (): Weekend | undefined => {
     return appData.weekends.find(w => w.id === appData.currentWeekendId);
@@ -65,11 +76,22 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
       };
     }
 
-    // Calculate previous balance
+    // Calculate previous balance including arrears and advance payments
     const previousWeekends = appData.weekends.filter(w => w.id !== currentWeekend.id);
     const previousMatches = previousWeekends.flatMap(w => getWeekendMatches(w));
     
     let prevBalance = player.balance;
+    
+    // Add arrears (outstanding dues from previous periods)
+    if (player.arrears) {
+      prevBalance += player.arrears;
+    }
+    
+    // Subtract advance payments
+    if (player.advancePayment) {
+      prevBalance -= player.advancePayment;
+    }
+    
     previousMatches.forEach(match => {
       const payment = getPlayerPayment(match, player.id);
       if (payment) {
@@ -112,7 +134,70 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
   };
 
   const getPlayerRows = (): PlayerPaymentRow[] => {
-    return appData.players.map(calculatePlayerPaymentRow);
+    let rows = appData.players.map(calculatePlayerPaymentRow);
+    
+    // Apply sorting if configured
+    if (sortConfig) {
+      rows.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+        
+        switch (sortConfig.key) {
+          case 'player':
+            aValue = getPlayerDisplayName(a.player).toLowerCase();
+            bValue = getPlayerDisplayName(b.player).toLowerCase();
+            break;
+          case 'prevBalance':
+            aValue = a.prevBalance;
+            bValue = b.prevBalance;
+            break;
+          case 'weekendDue':
+            aValue = a.totalDue;
+            bValue = b.totalDue;
+            break;
+          case 'advancePayment':
+            aValue = a.player.advancePayment || 0;
+            bValue = b.player.advancePayment || 0;
+            break;
+          case 'totalDue':
+            aValue = a.currentBalance;
+            bValue = b.currentBalance;
+            break;
+          case 'status':
+            const statusOrder = { 'pending': 0, 'partial': 1, 'paid': 2 };
+            aValue = statusOrder[a.status as keyof typeof statusOrder];
+            bValue = statusOrder[b.status as keyof typeof statusOrder];
+            break;
+          default:
+            return 0;
+        }
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    
+    return rows;
+  };
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (columnKey: string) => {
+    if (!sortConfig || sortConfig.key !== columnKey) {
+      return '↕️';
+    }
+    return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
   const getPlayerDisplayName = (player: Player): string => {
@@ -368,6 +453,20 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     setEditValue('New Player');
   };
 
+  // Clear all arrears for all players
+  const handleClearAllArrears = () => {
+    if (window.confirm('Are you sure you want to clear all financial data for all players? This will reset balance, arrears, and advance payments to ₹0.')) {
+      const updatedPlayers = appData.players.map(player => ({
+        ...player,
+        balance: 0,
+        arrears: 0,
+        advancePayment: 0
+      }));
+      onAppDataUpdate({ ...appData, players: updatedPlayers });
+      alert('All financial data has been cleared successfully!');
+    }
+  };
+
   const handleDeletePlayer = (playerId: string) => {
     if (window.confirm('Are you sure you want to delete this player? This will remove them from all matches and payment records.')) {
       // Remove player from players list
@@ -427,6 +526,8 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
       nickname: newPlayerData.nickname.trim() || undefined,
       mobile: newPlayerData.mobile.trim() || '',
       balance: 0,
+      arrears: newPlayerData.arrears || 0,
+      advancePayment: newPlayerData.advancePayment || 0,
       regular: newPlayerData.regular
     };
     
@@ -434,7 +535,7 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     onAppDataUpdate({ ...appData, players: updatedPlayers });
     
     // Reset form
-    setNewPlayerData({ firstName: '', lastName: '', nickname: '', mobile: '', regular: false });
+    setNewPlayerData({ firstName: '', lastName: '', nickname: '', mobile: '', regular: false, arrears: 0, advancePayment: 0 });
     setEditingPlayer(null);
   };
 
@@ -480,7 +581,7 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     // Updating existing player only
     const updatedPlayers = appData.players.map(player => {
       if (player.id === playerId) {
-        if (field === 'balance') {
+        if (field === 'balance' || field === 'arrears' || field === 'advancePayment') {
           return { ...player, [field]: parseFloat(editValue) || 0 };
         }
         return { ...player, [field]: editValue.trim() };
@@ -503,6 +604,37 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     const playerRow = calculatePlayerPaymentRow(appData.players.find(p => p.id === playerId)!);
     setEditingCell({ playerId, field: 'totalDue' });
     setEditValue(Math.max(0, playerRow.currentBalance).toString());
+  };
+
+  // Handle editing previous balance in Payment Overview
+  const handlePrevBalanceClick = (playerId: string) => {
+    const player = appData.players.find(p => p.id === playerId)!;
+    setEditingCell({ playerId, field: 'prevBalance' });
+    setEditValue((player.balance || 0).toString());
+  };
+
+  const handlePrevBalanceEdit = (playerId: string) => {
+    const newBalance = parseFloat(editValue) || 0;
+    const updatedPlayers = appData.players.map(player => 
+      player.id === playerId ? { ...player, balance: newBalance } : player
+    );
+    onAppDataUpdate({ ...appData, players: updatedPlayers });
+    setEditingCell(null);
+  };
+
+  const handleAdvancePaymentClick = (playerId: string) => {
+    const player = appData.players.find(p => p.id === playerId)!;
+    setEditingCell({ playerId, field: 'advancePayment' });
+    setEditValue((player.advancePayment || 0).toString());
+  };
+
+  const handleAdvancePaymentEdit = (playerId: string) => {
+    const newAdvancePayment = parseFloat(editValue) || 0;
+    const updatedPlayers = appData.players.map(player => 
+      player.id === playerId ? { ...player, advancePayment: newAdvancePayment } : player
+    );
+    onAppDataUpdate({ ...appData, players: updatedPlayers });
+    setEditingCell(null);
   };
 
   const handleTotalDueSave = (playerId: string) => {
@@ -617,19 +749,6 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
     });
   };
 
-  const handleExportData = () => {
-    const dataString = exportData();
-    const blob = new Blob([dataString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cricket-data-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
   const currentWeekend = getCurrentWeekend();
   const playerRows = getPlayerRows();
@@ -694,6 +813,9 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                 <button className="btn primary" onClick={handleAddNewPlayer}>
                   Add New Player
                 </button>
+                <button className="btn secondary" onClick={handleClearAllArrears}>
+                  Clear All Financial Data
+                </button>
               </div>
               
               {filteredPlayers.length === 0 ? (
@@ -709,6 +831,8 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                         <th>Last Name</th>
                         <th>Nickname</th>
                         <th>Mobile</th>
+                        <th>Arrears</th>
+                        <th>Advance</th>
                         <th>Regular</th>
                         <th>Actions</th>
                       </tr>
@@ -758,6 +882,30 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                             placeholder="Mobile number"
                             value={newPlayerData.mobile}
                             onChange={(e) => setNewPlayerData(prev => ({...prev, mobile: e.target.value}))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleAddNewPlayer();
+                            }}
+                            className="inline-edit new-player-input"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={newPlayerData.arrears}
+                            onChange={(e) => setNewPlayerData(prev => ({...prev, arrears: parseFloat(e.target.value) || 0}))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleAddNewPlayer();
+                            }}
+                            className="inline-edit new-player-input"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={newPlayerData.advancePayment}
+                            onChange={(e) => setNewPlayerData(prev => ({...prev, advancePayment: parseFloat(e.target.value) || 0}))}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleAddNewPlayer();
                             }}
@@ -897,6 +1045,52 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                                 onClick={() => handlePlayerEdit(player.id, 'mobile', player.mobile)}
                               >
                                 {player.mobile || <span className="placeholder">Add mobile</span>}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {editingPlayer?.playerId === player.id && editingPlayer?.field === 'arrears' ? (
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={handlePlayerSave}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handlePlayerSave();
+                                  if (e.key === 'Escape') setEditingPlayer(null);
+                                }}
+                                className="inline-edit"
+                                autoFocus
+                              />
+                            ) : (
+                              <span 
+                                className="editable-cell"
+                                onClick={() => handlePlayerEdit(player.id, 'arrears', (player.arrears || 0).toString())}
+                              >
+                                {player.arrears ? `₹${player.arrears}` : <span className="placeholder">₹0</span>}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {editingPlayer?.playerId === player.id && editingPlayer?.field === 'advancePayment' ? (
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={handlePlayerSave}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handlePlayerSave();
+                                  if (e.key === 'Escape') setEditingPlayer(null);
+                                }}
+                                className="inline-edit"
+                                autoFocus
+                              />
+                            ) : (
+                              <span 
+                                className="editable-cell"
+                                onClick={() => handlePlayerEdit(player.id, 'advancePayment', (player.advancePayment || 0).toString())}
+                              >
+                                {player.advancePayment ? `₹${player.advancePayment}` : <span className="placeholder">₹0</span>}
                               </span>
                             )}
                           </td>
@@ -1244,18 +1438,56 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
       <div className="payment-section">
         <div className="section-header">
           <h2>Payment Overview</h2>
-          <p className="help-text">Click Total Due amount to edit • Click status button to toggle payment status • Overpayments show negative balance with Paid status</p>
+          <p className="help-text">Click Prev Balance, Advance Paid, or Total Due to edit • Click status button to toggle payment status • All edits automatically update final calculations</p>
         </div>
 
         <div className="payment-table-wrapper">
           <table className="payment-table">
             <thead>
               <tr>
-                <th>Player</th>
-                <th>Prev Balance</th>
-                <th>Weekend Due<br/><small>{currentWeekend && formatDate(currentWeekend.startDate, 'saturday')} - {currentWeekend && formatDate(currentWeekend.startDate, 'sunday')}</small></th>
-                <th>Total Due</th>
-                <th>Status</th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('player')}
+                  title="Click to sort by player name"
+                >
+                  Player {getSortIcon('player')}
+                </th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('prevBalance')}
+                  title="Click to sort by previous balance"
+                >
+                  Prev Balance {getSortIcon('prevBalance')}
+                </th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('weekendDue')}
+                  title="Click to sort by weekend due amount"
+                >
+                  Weekend Due {getSortIcon('weekendDue')}<br/>
+                  <small>{currentWeekend && formatDate(currentWeekend.startDate, 'saturday')} - {currentWeekend && formatDate(currentWeekend.startDate, 'sunday')}</small>
+                </th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('advancePayment')}
+                  title="Click to sort by advance payment"
+                >
+                  Advance Paid {getSortIcon('advancePayment')}
+                </th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('totalDue')}
+                  title="Click to sort by total due amount"
+                >
+                  Total Due {getSortIcon('totalDue')}
+                </th>
+                <th 
+                  className="sortable-header" 
+                  onClick={() => handleSort('status')}
+                  title="Click to sort by payment status"
+                >
+                  Status {getSortIcon('status')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1265,10 +1497,55 @@ const ConsolidatedDashboard: React.FC<ConsolidatedDashboardProps> = ({ appData, 
                     <strong>{getPlayerDisplayName(row.player)}</strong>
                   </td>
                   <td className={`amount ${row.prevBalance > 0 ? 'due' : row.prevBalance < 0 ? 'overpaid' : ''}`}>
-                    {row.prevBalance !== 0 && `₹${Math.abs(row.prevBalance)}`}
+                    {editingCell?.playerId === row.player.id && editingCell?.field === 'prevBalance' ? (
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => handlePrevBalanceEdit(row.player.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handlePrevBalanceEdit(row.player.id);
+                          if (e.key === 'Escape') setEditingCell(null);
+                        }}
+                        className="payment-input"
+                        autoFocus
+                      />
+                    ) : (
+                      <span
+                        className="amount editable"
+                        onClick={() => handlePrevBalanceClick(row.player.id)}
+                        title="Click to edit previous balance"
+                      >
+                        {row.prevBalance !== 0 ? `₹${Math.abs(row.prevBalance)}` : '₹0'}
+                      </span>
+                    )}
                   </td>
                   <td className="weekend-due">
                     {row.totalDue > 0 ? `₹${row.totalDue}` : '-'}
+                  </td>
+                  <td className={`amount ${row.player.advancePayment && row.player.advancePayment > 0 ? 'overpaid' : ''}`}>
+                    {editingCell?.playerId === row.player.id && editingCell?.field === 'advancePayment' ? (
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => handleAdvancePaymentEdit(row.player.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAdvancePaymentEdit(row.player.id);
+                          if (e.key === 'Escape') setEditingCell(null);
+                        }}
+                        className="payment-input"
+                        autoFocus
+                      />
+                    ) : (
+                      <span
+                        className="amount editable"
+                        onClick={() => handleAdvancePaymentClick(row.player.id)}
+                        title="Click to edit advance payment"
+                      >
+                        {row.player.advancePayment ? `₹${row.player.advancePayment}` : '₹0'}
+                      </span>
+                    )}
                   </td>
                   <td className={`total ${row.currentBalance > 0 ? 'due' : row.currentBalance < 0 ? 'overpaid' : ''}`}>
                     <div className="total-payment">

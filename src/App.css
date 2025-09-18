@@ -128,12 +128,18 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  font-weight: 700;
 }
 
 .weekend-dates {
   margin: 0.5rem 0 0 0;
-  font-size: 0.9rem;
-  opacity: 0.9;
+  font-size: 1rem;
+  color: #ffffff;
+  opacity: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  font-weight: 500;
 }
 
 .header-actions {
@@ -1108,6 +1114,18 @@ body {
   font-weight: 600;
   color: #495057;
   border-bottom: 2px solid #dee2e6;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sortable-header:hover {
+  background: #e9ecef !important;
+  color: #007bff !important;
 }
 
 .payment-table td {

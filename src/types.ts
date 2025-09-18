@@ -5,6 +5,8 @@ export interface Player {
   nickname?: string;
   mobile: string;
   balance: number; // positive = owes money, negative = overpaid
+  arrears?: number; // outstanding dues from previous periods
+  advancePayment?: number; // advance payments made
   regular?: boolean; // true if regular player, false/undefined for additional players
 }
 
